@@ -166,9 +166,9 @@
 
     .table-header {
       display: grid;
-      grid-template-columns: 2fr 0.9fr 0.7fr 1fr;
-      gap: 8px;
-      padding: 10px 12px;
+      grid-template-columns: 1.8fr 0.8fr 0.7fr 1.2fr 0.9fr 0.7fr;
+      gap: 6px;
+      padding: 10px 10px;
       background: var(--header);
       border-radius: 8px 8px 0 0;
       font-size: 12px;
@@ -178,14 +178,29 @@
 
     .table-row {
       display: grid;
-      grid-template-columns: 2fr 0.9fr 0.7fr 1fr;
-      gap: 8px;
-      padding: 14px 12px;
+      grid-template-columns: 1.8fr 0.8fr 0.7fr 1.2fr 0.9fr 0.7fr;
+      gap: 6px;
+      padding: 12px 10px;
       background: var(--card);
       border-bottom: 1px solid var(--divider);
       cursor: pointer;
       font-size: 13px;
       align-items: center;
+    }
+
+    .xueqiu-btn {
+      display: inline-block;
+      padding: 3px 8px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      border-radius: 6px;
+      font-size: 12px;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+
+    .xueqiu-btn:active {
+      opacity: 0.7;
     }
 
     .table-row:last-child {
@@ -499,8 +514,19 @@
             <input type="number" id="inputBuyPrice" placeholder="可选" step="0.01" />
           </div>
           <div class="form-group">
+            <label>买入方式</label>
+            <div class="radio-group">
+              <label><input type="radio" name="buyType" value="shares" checked /> 按份数/股数</label>
+              <label><input type="radio" name="buyType" value="amount" /> 按金额</label>
+            </div>
+          </div>
+          <div class="form-group" id="sharesGroup">
+            <label>买入份数 / 股数</label>
+            <input type="number" id="inputBuyShares" placeholder="例如：100" step="1" />
+          </div>
+          <div class="form-group" id="amountGroup" style="display:none;">
             <label>买入金额（元）</label>
-            <input type="number" id="inputBuyAmount" placeholder="可选" step="0.01" />
+            <input type="number" id="inputBuyAmount" placeholder="例如：5000" step="0.01" />
           </div>
           <div class="form-group">
             <label>买入时间</label>
@@ -671,12 +697,26 @@
         let html = `
           <div class="table-header">
             <div>名称/代码</div>
-            <div>日期</div>
+            <div>推荐日</div>
             <div>状态</div>
+            <div>买入详情</div>
             <div>来源</div>
+            <div>操作</div>
           </div>
         `;
-        html += list.map(item => `
+        html += list.map(item => {
+          let buyInfo = '<span style="color:var(--text2)">-</span>';
+          if (item.isBought) {
+            const parts = [];
+            if (item.buyShares) parts.push('数量: ' + item.buyShares);
+            if (item.buyAmount) parts.push('金额: ' + item.buyAmount + '元');
+            if (item.buyPrice) parts.push('价格: ' + item.buyPrice);
+            if (item.buyDate) parts.push('购入: ' + formatDate(item.buyDate));
+            if (parts.length === 0) parts.push('已买入');
+            buyInfo = parts.map(p => '<div style="font-size:11px;line-height:1.45;">' + p + '</div>').join('');
+          }
+          const xqUrl = getXueqiuUrl(item.code);
+          return `
           <div class="table-row" data-id="${item.id}">
             <div>
               <div class="table-name">${escapeHtml(item.name)}</div>
@@ -684,15 +724,34 @@
             </div>
             <div>${formatDate(item.recommendDate)}</div>
             <div class="${item.isBought ? 'status-bought' : 'status-not'}">${item.isBought ? '已买' : '未买'}</div>
+            <div>${buyInfo}</div>
             <div style="color:var(--text2);font-size:12px;">${escapeHtml(item.source || '-')}</div>
+            <div>
+              ${xqUrl ? `<a class="xueqiu-btn" href="${xqUrl}" target="_blank" rel="noopener" onclick="event.stopPropagation()">雪球</a>` : '-'}
+            </div>
           </div>
-        `).join('');
+        `}).join('');
         container.innerHTML = html;
       }
 
-      container.querySelectorAll('[data-id]').forEach(el => {
-        el.addEventListener('click', () => showDetail(el.dataset.id));
+      container.querySelectorAll('.table-row[data-id]').forEach(el => {
+        el.addEventListener('click', (e) => {
+          if (e.target.closest('a')) return; // 点击雪球按钮不进入详情
+          showDetail(el.dataset.id);
+        });
       });
+    }
+
+    // 根据代码生成雪球链接
+    function getXueqiuUrl(code) {
+      if (!code || !/^\d{6}$/.test(code)) return null;
+      // 6开头通常是沪市，0/3开头是深市
+      let prefix = 'SH';
+      if (code.startsWith('0') || code.startsWith('3')) prefix = 'SZ';
+      // 基金常见代码也尽量兼容
+      if (code.startsWith('15') || code.startsWith('16') || code.startsWith('18')) prefix = 'SZ';
+      if (code.startsWith('50') || code.startsWith('51') || code.startsWith('56') || code.startsWith('58')) prefix = 'SH';
+      return `https://xueqiu.com/S/${prefix}${code}`;
     }
 
     function showPage(pageId) {
@@ -718,8 +777,15 @@
         document.getElementById('inputDate').value = item.recommendDate ? new Date(item.recommendDate).toISOString().slice(0, 10) : '';
         document.querySelector('input[name="bought"][value="' + (item.isBought ? '1' : '0') + '"]').checked = true;
         document.getElementById('inputBuyPrice').value = item.buyPrice || '';
+        document.getElementById('inputBuyShares').value = item.buyShares || '';
         document.getElementById('inputBuyAmount').value = item.buyAmount || '';
         document.getElementById('inputBuyDate').value = item.buyDate ? new Date(item.buyDate).toISOString().slice(0, 10) : '';
+
+        // 买入方式
+        const buyType = item.buyType || (item.buyShares ? 'shares' : 'amount');
+        document.querySelector('input[name="buyType"][value="' + buyType + '"]').checked = true;
+        document.getElementById('sharesGroup').style.display = buyType === 'shares' ? 'block' : 'none';
+        document.getElementById('amountGroup').style.display = buyType === 'amount' ? 'block' : 'none';
 
         if (item.isBought) buyFields.classList.add('show');
         else buyFields.classList.remove('show');
@@ -732,8 +798,12 @@
         document.getElementById('inputDate').value = new Date().toISOString().slice(0, 10);
         document.querySelector('input[name="bought"][value="0"]').checked = true;
         document.getElementById('inputBuyPrice').value = '';
+        document.getElementById('inputBuyShares').value = '';
         document.getElementById('inputBuyAmount').value = '';
         document.getElementById('inputBuyDate').value = '';
+        document.querySelector('input[name="buyType"][value="shares"]').checked = true;
+        document.getElementById('sharesGroup').style.display = 'block';
+        document.getElementById('amountGroup').style.display = 'none';
         buyFields.classList.remove('show');
       }
 
@@ -751,6 +821,7 @@
       const recommendDateStr = document.getElementById('inputDate').value;
       const buyDateStr = document.getElementById('inputBuyDate').value;
 
+      const buyType = document.querySelector('input[name="buyType"]:checked')?.value || 'shares';
       const data = {
         id: editingId || generateId(),
         name: name,
@@ -760,7 +831,9 @@
         recommendDate: recommendDateStr ? new Date(recommendDateStr).getTime() : Date.now(),
         isBought: isBought,
         buyPrice: isBought ? (parseFloat(document.getElementById('inputBuyPrice').value) || null) : null,
-        buyAmount: isBought ? (parseFloat(document.getElementById('inputBuyAmount').value) || null) : null,
+        buyType: isBought ? buyType : null,
+        buyShares: isBought && buyType === 'shares' ? (parseFloat(document.getElementById('inputBuyShares').value) || null) : null,
+        buyAmount: isBought && buyType === 'amount' ? (parseFloat(document.getElementById('inputBuyAmount').value) || null) : null,
         buyDate: isBought && buyDateStr ? new Date(buyDateStr).getTime() : null
       };
 
@@ -783,9 +856,13 @@
       editingId = id;
       document.getElementById('detailTitle').textContent = item.name;
 
+      const xqUrl = getXueqiuUrl(item.code);
       let html = `
         <div class="detail-label">代码</div>
-        <div class="detail-value">${escapeHtml(item.code || '-')}</div>
+        <div class="detail-value">
+          ${escapeHtml(item.code || '-')}
+          ${xqUrl ? ` &nbsp; <a class="xueqiu-btn" href="${xqUrl}" target="_blank" rel="noopener">在雪球查看</a>` : ''}
+        </div>
         <div class="detail-label">推荐来源</div>
         <div class="detail-value">${escapeHtml(item.source || '-')}</div>
         <div class="detail-label">推荐时间</div>
@@ -795,14 +872,19 @@
       `;
 
       if (item.isBought) {
+        let buyInfo = '已买入<br>';
+        if (item.buyDate) buyInfo += '买入时间：' + formatFullDate(item.buyDate) + '<br>';
+        if (item.buyPrice) buyInfo += '买入价格：' + item.buyPrice + '<br>';
+        if (item.buyType === 'shares' && item.buyShares) {
+          buyInfo += '买入份数/股数：' + item.buyShares;
+        } else if (item.buyAmount) {
+          buyInfo += '买入金额：' + item.buyAmount + ' 元';
+        } else if (item.buyShares) {
+          buyInfo += '买入份数/股数：' + item.buyShares;
+        }
         html += `
           <div class="detail-label" style="margin-top:16px;">我的操作</div>
-          <div class="detail-value">
-            已买入<br>
-            ${item.buyDate ? '买入时间：' + formatFullDate(item.buyDate) + '<br>' : ''}
-            ${item.buyPrice ? '买入价格：' + item.buyPrice + '<br>' : ''}
-            ${item.buyAmount ? '买入金额：' + item.buyAmount + ' 元' : ''}
-          </div>
+          <div class="detail-value">${buyInfo}</div>
         `;
       } else {
         html += `
@@ -859,6 +941,61 @@
           buyFields.classList.remove('show');
         }
       });
+    });
+
+    // 买入方式切换：份数 / 金额
+    document.querySelectorAll('input[name="buyType"]').forEach(radio => {
+      radio.addEventListener('change', () => {
+        const isShares = radio.value === 'shares';
+        document.getElementById('sharesGroup').style.display = isShares ? 'block' : 'none';
+        document.getElementById('amountGroup').style.display = isShares ? 'none' : 'block';
+      });
+    });
+
+    // ==================== 代码/名称自动提示 ====================
+    // 常用股票 + 基金字典（可继续扩充）
+    const STOCK_DICT = {
+      '600519': '贵州茅台', '000858': '五粮液', '601318': '中国平安', '600036': '招商银行',
+      '000333': '美的集团', '002415': '海康威视', '600276': '恒瑞医药', '000001': '平安银行',
+      '601166': '兴业银行', '600030': '中信证券', '000651': '格力电器', '002594': '比亚迪',
+      '300750': '宁德时代', '601012': '隆基绿能', '600900': '长江电力', '601888': '中国中免',
+      '000568': '泸州老窖', '600887': '伊利股份', '601398': '工商银行', '601288': '农业银行',
+      '601939': '建设银行', '600000': '浦发银行', '601328': '交通银行', '600016': '民生银行',
+      '000002': '万科A', '600048': '保利发展', '601668': '中国建筑', '600519': '贵州茅台',
+      '510300': '沪深300ETF', '510050': '上证50ETF', '159915': '创业板ETF', '512100': '中证1000ETF',
+      '510500': '中证500ETF', '159919': '沪深300ETF', '512880': '证券ETF', '512660': '军工ETF',
+      '515790': '光伏ETF', '512480': '半导体ETF', '159995': '芯片ETF', '512010': '医药ETF',
+      '161725': '招商中证白酒', '005827': '易方达蓝筹精选', '110011': '易方达优质精选',
+      '163406': '兴全合润', '005911': '广发双擎升级', '001938': '中欧时代先锋',
+      '000961': '天弘沪深300', '110022': '易方达消费行业', '161005': '富国天惠成长'
+    };
+
+    // 反向字典：名称 → 代码
+    const NAME_TO_CODE = {};
+    Object.keys(STOCK_DICT).forEach(code => {
+      NAME_TO_CODE[STOCK_DICT[code]] = code;
+    });
+
+    // 输入代码后自动填名称
+    document.getElementById('inputCode').addEventListener('blur', function() {
+      const code = this.value.trim();
+      if (code && STOCK_DICT[code]) {
+        const nameInput = document.getElementById('inputName');
+        if (!nameInput.value.trim()) {
+          nameInput.value = STOCK_DICT[code];
+        }
+      }
+    });
+
+    // 输入名称后尝试自动填代码
+    document.getElementById('inputName').addEventListener('blur', function() {
+      const name = this.value.trim();
+      if (name && NAME_TO_CODE[name]) {
+        const codeInput = document.getElementById('inputCode');
+        if (!codeInput.value.trim()) {
+          codeInput.value = NAME_TO_CODE[name];
+        }
+      }
     });
 
     // 初始化
