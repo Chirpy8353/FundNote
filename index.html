@@ -657,6 +657,25 @@
       return new Date(ts).toLocaleDateString('zh-CN');
     }
 
+    // 转成 date input 需要的 yyyy-MM-dd（使用本地时间，避免时区偏差）
+    function toDateInputValue(ts) {
+      if (!ts) return '';
+      const d = new Date(ts);
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return y + '-' + m + '-' + day;
+    }
+
+    // 从 date input 的值转成时间戳（本地日期）
+    function fromDateInputValue(str) {
+      if (!str) return null;
+      const parts = str.split('-');
+      if (parts.length !== 3) return null;
+      const d = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+      return d.getTime();
+    }
+
     function getFiltered() {
       if (currentFilter === 'bought') return recommendations.filter(r => r.isBought);
       if (currentFilter === 'not') return recommendations.filter(r => !r.isBought);
@@ -774,16 +793,20 @@
         document.getElementById('inputCode').value = item.code || '';
         document.getElementById('inputSource').value = item.source || '';
         document.getElementById('inputContent').value = item.content || '';
-        document.getElementById('inputDate').value = item.recommendDate ? new Date(item.recommendDate).toISOString().slice(0, 10) : '';
+        document.getElementById('inputDate').value = toDateInputValue(item.recommendDate);
         document.querySelector('input[name="bought"][value="' + (item.isBought ? '1' : '0') + '"]').checked = true;
-        document.getElementById('inputBuyPrice').value = item.buyPrice || '';
-        document.getElementById('inputBuyShares').value = item.buyShares || '';
-        document.getElementById('inputBuyAmount').value = item.buyAmount || '';
-        document.getElementById('inputBuyDate').value = item.buyDate ? new Date(item.buyDate).toISOString().slice(0, 10) : '';
+        document.getElementById('inputBuyPrice').value = item.buyPrice != null ? item.buyPrice : '';
+        document.getElementById('inputBuyShares').value = item.buyShares != null ? item.buyShares : '';
+        document.getElementById('inputBuyAmount').value = item.buyAmount != null ? item.buyAmount : '';
+        document.getElementById('inputBuyDate').value = toDateInputValue(item.buyDate);
 
-        // 买入方式
-        const buyType = item.buyType || (item.buyShares ? 'shares' : 'amount');
-        document.querySelector('input[name="buyType"][value="' + buyType + '"]').checked = true;
+        // 买入方式（兼容旧数据）
+        let buyType = item.buyType;
+        if (!buyType) {
+          buyType = (item.buyShares != null) ? 'shares' : 'amount';
+        }
+        const buyTypeRadio = document.querySelector('input[name="buyType"][value="' + buyType + '"]');
+        if (buyTypeRadio) buyTypeRadio.checked = true;
         document.getElementById('sharesGroup').style.display = buyType === 'shares' ? 'block' : 'none';
         document.getElementById('amountGroup').style.display = buyType === 'amount' ? 'block' : 'none';
 
@@ -828,13 +851,13 @@
         code: document.getElementById('inputCode').value.trim(),
         source: document.getElementById('inputSource').value.trim(),
         content: document.getElementById('inputContent').value.trim(),
-        recommendDate: recommendDateStr ? new Date(recommendDateStr).getTime() : Date.now(),
+        recommendDate: fromDateInputValue(recommendDateStr) || Date.now(),
         isBought: isBought,
         buyPrice: isBought ? (parseFloat(document.getElementById('inputBuyPrice').value) || null) : null,
         buyType: isBought ? buyType : null,
         buyShares: isBought && buyType === 'shares' ? (parseFloat(document.getElementById('inputBuyShares').value) || null) : null,
         buyAmount: isBought && buyType === 'amount' ? (parseFloat(document.getElementById('inputBuyAmount').value) || null) : null,
-        buyDate: isBought && buyDateStr ? new Date(buyDateStr).getTime() : null
+        buyDate: isBought ? fromDateInputValue(buyDateStr) : null
       };
 
       if (editingId) {
