@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#F7F5F2" />
   <title>基金股票推荐整理</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%235B8A8A'/><text x='50' y='68' font-size='55' text-anchor='middle' fill='white' font-family='system-ui,sans-serif' font-weight='700'>基</text></svg>" />
-  <meta name="app-version" content="1.3.3" />
+  <meta name="app-version" content="1.4.0" />
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     :root {
@@ -133,7 +133,7 @@
         <button class="btn btn-secondary" id="googleLoginBtn" style="width:100%;font-size:13px;">使用 Google 登录</button>
       </div>
       <div class="auth-switch" id="authSwitch">还没有账号？<a href="javascript:void(0)" id="switchToRegister" style="color:#5B8A8A;font-weight:600;margin-left:4px;">去注册</a></div>
-      <div class="version-tag">版本 v1.3.3</div>
+      <div class="version-tag">版本 v1.4.0</div>
     </div>
   </div>
 
@@ -143,8 +143,9 @@
 
     <div id="listPage" class="page active">
       <div class="topbar">
-        <h1>基金股票推荐整理 <span style="font-size:11px;color:#aaa;font-weight:400;">v1.3.3</span></h1>
+        <h1>基金股票推荐整理 <span style="font-size:11px;color:#aaa;font-weight:400;">v1.4.0</span></h1>
         <div class="topbar-actions">
+          <button class="icon-btn" id="trashBtn" title="回收站">🗑</button>
           <button class="icon-btn" id="refreshBtn" title="刷新">↻</button>
           <button class="icon-btn" id="viewToggleBtn" title="切换视图">≡</button>
           <button class="icon-btn" id="logoutBtn" title="退出">⎋</button>
@@ -194,6 +195,16 @@
           <button class="btn btn-secondary" id="formCancelBtn">取消</button>
           <button class="btn btn-primary" id="formSaveBtn">保存</button>
         </div>
+      </div>
+    </div>
+
+    <div id="trashPage" class="page">
+      <div class="form-page">
+        <div class="page-header">
+          <button class="back-btn" id="trashBackBtn">←</button>
+          <div class="page-title">回收站</div>
+        </div>
+        <div id="trashList" class="list-container"></div>
       </div>
     </div>
 
@@ -302,7 +313,10 @@
     async function loadData() {
       showLoading(true); showError('');
       try {
-        const { data, error } = await sbClient.from('recommendations').select('*').order('recommend_date', { ascending: false });
+        const { data, error } = await sbClient.from('recommendations')
+          .select('*')
+          .is('deleted_at', null)
+          .order('recommend_date', { ascending: false });
         if (error) throw error;
         recommendations = data || [];
       } catch (e) {
@@ -339,11 +353,55 @@
     async function deleteItemById(id) {
       showLoading(true);
       try {
-        const { error } = await sbClient.from('recommendations').delete().eq('id', id);
+        const { error } = await sbClient.from('recommendations')
+          .update({ deleted_at: Date.now() })
+          .eq('id', id);
         if (error) throw error;
       } catch (e) {
         console.error(e);
         alert('删除失败：' + (e.message || e));
+        throw e;
+      } finally { showLoading(false); }
+    }
+
+    async function loadDeleted() {
+      showLoading(true);
+      try {
+        const { data, error } = await sbClient.from('recommendations')
+          .select('*')
+          .not('deleted_at', 'is', null)
+          .order('deleted_at', { ascending: false });
+        if (error) throw error;
+        return data || [];
+      } catch (e) {
+        console.error(e);
+        alert('读取回收站失败：' + (e.message || e));
+        return [];
+      } finally { showLoading(false); }
+    }
+
+    async function recoverItem(id) {
+      showLoading(true);
+      try {
+        const { error } = await sbClient.from('recommendations')
+          .update({ deleted_at: null })
+          .eq('id', id);
+        if (error) throw error;
+      } catch (e) {
+        console.error(e);
+        alert('恢复失败：' + (e.message || e));
+        throw e;
+      } finally { showLoading(false); }
+    }
+
+    async function permanentDelete(id) {
+      showLoading(true);
+      try {
+        const { error } = await sbClient.from('recommendations').delete().eq('id', id);
+        if (error) throw error;
+      } catch (e) {
+        console.error(e);
+        alert('彻底删除失败：' + (e.message || e));
         throw e;
       } finally { showLoading(false); }
     }
@@ -364,10 +422,6 @@
             <div class="card-content">${escapeHtml(item.content || '')}</div>
             <div class="card-status ${item.is_bought ? 'status-bought' : 'status-not'}">
               ${item.is_bought ? '已买入' + (item.buy_price ? ' · 买入价 ' + item.buy_price : '') : '未买入'}
-            </div>
-            <div class="card-actions">
-              <button class="mini-btn" data-action="detail" data-id="${item.id}">详情</button>
-              <button class="mini-btn primary" data-action="edit" data-id="${item.id}">编辑</button>
             </div>
           </div>`).join('');
       } else {
@@ -390,23 +444,33 @@
             <div class="${item.is_bought ? 'status-bought' : 'status-not'}">${item.is_bought ? '已买' : '未买'}</div>
             <div>${buyInfo}</div>
             <div style="color:var(--text2);font-size:12px;">${escapeHtml(item.source || '-')}</div>
-            <div style="display:flex;flex-direction:column;gap:4px;">
+            <div style="display:flex;flex-direction:row;flex-wrap:wrap;gap:4px;align-items:center;">
               ${xqUrl ? '<a class="xueqiu-btn" href="'+xqUrl+'" target="_blank" rel="noopener">雪球</a>' : ''}
-              <button class="mini-btn primary" data-action="edit" data-id="${item.id}" style="padding:3px 6px;">编辑</button>
+              <button class="mini-btn primary" data-action="edit" data-id="${item.id}" style="padding:3px 8px;">编辑</button>
+              <button class="mini-btn" data-action="delete" data-id="${item.id}" style="padding:3px 8px;color:#C75B5B;">删除</button>
             </div></div>`;
         }).join('');
         container.innerHTML = html;
       }
       container.querySelectorAll('[data-action]').forEach(btn => {
-        btn.addEventListener('click', e => {
+        btn.addEventListener('click', async e => {
           e.stopPropagation();
-          if (btn.dataset.action === 'detail') showDetail(btn.dataset.id);
-          if (btn.dataset.action === 'edit') openForm(btn.dataset.id);
+          const id = btn.dataset.id;
+          if (btn.dataset.action === 'detail') showDetail(id);
+          if (btn.dataset.action === 'edit') openForm(id);
+          if (btn.dataset.action === 'delete') {
+            if (!confirm('确定删除？可在回收站恢复')) return;
+            try {
+              await deleteItemById(id);
+              recommendations = recommendations.filter(r => r.id !== id);
+              renderList();
+            } catch (err) {}
+          }
         });
       });
       container.querySelectorAll('.card[data-id]').forEach(el => {
         el.addEventListener('click', e => {
-          if (e.target.closest('button')) return;
+          if (e.target.closest('button') || e.target.closest('a')) return;
           showDetail(el.dataset.id);
         });
       });
@@ -511,6 +575,14 @@
       showPage('detailPage');
     }
 
+    // 详情页：点击非内容区域返回
+    document.addEventListener('click', function detailBlankBack(e) {
+      const page = document.getElementById('detailPage');
+      if (!page || !page.classList.contains('active')) return;
+      if (e.target.closest('.detail-section') || e.target.closest('.btn-row') || e.target.closest('.page-header') || e.target.closest('a') || e.target.closest('button')) return;
+      if (page.contains(e.target)) showPage('listPage');
+    });
+
     async function deleteItem() {
       if (!editingId || !confirm('确定删除这条记录吗？')) return;
       try {
@@ -576,6 +648,48 @@
     document.getElementById('detailDeleteBtn').addEventListener('click', deleteItem);
     document.getElementById('refreshBtn').addEventListener('click', loadData);
     document.getElementById('logoutBtn').addEventListener('click', logout);
+    document.getElementById('trashBtn').addEventListener('click', async () => {
+      const list = await loadDeleted();
+      const box = document.getElementById('trashList');
+      if (!list.length) {
+        box.innerHTML = '<div class="empty">回收站是空的</div>';
+      } else {
+        box.innerHTML = list.map(item => `
+          <div class="card">
+            <div class="card-title">${escapeHtml(item.name)}</div>
+            <div class="card-code">${escapeHtml(item.code || '')}</div>
+            <div class="card-meta">删除于 ${formatFullDate(item.deleted_at)}</div>
+            <div class="card-actions">
+              <button class="mini-btn primary" data-recover="${item.id}">恢复</button>
+              <button class="mini-btn" data-purge="${item.id}" style="color:#C75B5B;">彻底删除</button>
+            </div>
+          </div>
+        `).join('');
+        box.querySelectorAll('[data-recover]').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            try {
+              await recoverItem(btn.dataset.recover);
+              btn.closest('.card').remove();
+              if (!box.querySelector('.card')) box.innerHTML = '<div class="empty">回收站是空的</div>';
+              await loadData();
+            } catch (e) {}
+          });
+        });
+        box.querySelectorAll('[data-purge]').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            if (!confirm('彻底删除后无法恢复，确定？')) return;
+            try {
+              await permanentDelete(btn.dataset.purge);
+              btn.closest('.card').remove();
+              if (!box.querySelector('.card')) box.innerHTML = '<div class="empty">回收站是空的</div>';
+            } catch (e) {}
+          });
+        });
+      }
+      showPage('trashPage');
+    });
+    document.getElementById('trashBackBtn').addEventListener('click', () => showPage('listPage'));
+
     document.querySelectorAll('.filter-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
