@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <meta name="theme-color" content="#F7F5F2" />
   <title>基金股票推荐整理</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%235B8A8A'/><text x='50' y='68' font-size='55' text-anchor='middle' fill='white' font-family='system-ui,sans-serif' font-weight='700'>基</text></svg>" />
+  <meta name="app-version" content="1.2.0" />
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     :root {
@@ -109,19 +111,26 @@
     .auth-box input:focus { border-color: var(--accent); }
     .auth-error { color: var(--danger); font-size: 13px; text-align: center; margin-bottom: 10px; min-height: 20px; }
     .auth-switch { text-align: center; margin-top: 16px; font-size: 13px; color: var(--text2); }
-    .auth-switch span { color: var(--accent); cursor: pointer; }
+    .auth-switch span {
+      color: var(--accent); cursor: pointer; font-weight: 600;
+      padding: 6px 10px; display: inline-block; border-radius: 8px;
+    }
+    .auth-switch span:active { background: var(--accent-soft); }
+    .version-tag {
+      text-align: center; font-size: 11px; color: #aaa; margin-top: 20px;
+    }
   </style>
 </head>
 <body>
   <div id="authPage" class="auth-page">
     <div class="auth-box">
       <h2 id="authTitle">登录</h2>
-      <p class="sub" id="authSub">使用邮箱登录后查看你的推荐记录</p>
       <div class="auth-error" id="authError"></div>
       <input type="email" id="authEmail" placeholder="邮箱" autocomplete="email" />
       <input type="password" id="authPassword" placeholder="密码（至少6位）" autocomplete="current-password" />
       <button class="btn btn-primary" id="authSubmitBtn" style="width:100%;margin-top:4px;">登录</button>
-      <div class="auth-switch" id="authSwitch">还没有账号？<span data-auth-switch="register">去注册</span></div>
+      <div class="auth-switch" id="authSwitch">还没有账号？<span data-auth-switch="register" onclick="setAuthMode(true)">去注册</span></div>
+      <div class="version-tag">版本 v1.2.0</div>
     </div>
   </div>
 
@@ -131,7 +140,7 @@
 
     <div id="listPage" class="page active">
       <div class="topbar">
-        <h1>基金股票推荐整理</h1>
+        <h1>基金股票推荐整理 <span style="font-size:11px;color:#aaa;font-weight:400;">v1.2.0</span></h1>
         <div class="topbar-actions">
           <button class="icon-btn" id="refreshBtn" title="刷新">↻</button>
           <button class="icon-btn" id="viewToggleBtn" title="切换视图">≡</button>
@@ -475,11 +484,10 @@
     function setAuthMode(register) {
       isRegisterMode = register;
       document.getElementById('authTitle').textContent = register ? '注册' : '登录';
-      document.getElementById('authSub').textContent = register ? '创建一个账号来保存你的推荐' : '使用邮箱登录后查看你的推荐记录';
       document.getElementById('authSubmitBtn').textContent = register ? '注册' : '登录';
       document.getElementById('authSwitch').innerHTML = register
         ? '已有账号？<span data-auth-switch="login">去登录</span>'
-        : '还没有账号？<span data-auth-switch="register">去注册</span>';
+        : '还没有账号？<span data-auth-switch="register" onclick="setAuthMode(true)">去注册</span>';
       document.getElementById('authError').textContent = '';
     }
 
