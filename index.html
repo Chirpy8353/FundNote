@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#F7F5F2" />
   <title>基金股票推荐整理</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%235B8A8A'/><text x='50' y='68' font-size='55' text-anchor='middle' fill='white' font-family='system-ui,sans-serif' font-weight='700'>基</text></svg>" />
-  <meta name="app-version" content="1.4.2" />
+  <meta name="app-version" content="1.4.3" />
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     :root {
@@ -133,7 +133,7 @@
         <button class="btn btn-secondary" id="googleLoginBtn" style="width:100%;font-size:13px;">使用 Google 登录</button>
       </div>
       <div class="auth-switch" id="authSwitch">还没有账号？<a href="javascript:void(0)" id="switchToRegister" style="color:#5B8A8A;font-weight:600;margin-left:4px;">去注册</a></div>
-      <div class="version-tag">版本 v1.4.2</div>
+      <div class="version-tag">版本 v1.4.3</div>
     </div>
   </div>
 
@@ -143,7 +143,7 @@
 
     <div id="listPage" class="page active">
       <div class="topbar">
-        <h1>基金股票推荐整理 <span style="font-size:11px;color:#aaa;font-weight:400;">v1.4.2</span></h1>
+        <h1>基金股票推荐整理 <span style="font-size:11px;color:#aaa;font-weight:400;">v1.4.3</span></h1>
         <div class="topbar-actions">
           <button class="icon-btn" id="trashBtn" title="回收站">🗑</button>
           <button class="icon-btn" id="refreshBtn" title="刷新">↻</button>
@@ -324,6 +324,14 @@
       const t = d.getTime();
       return isNaN(t) ? null : t;
     }
+
+    function getBuyAmount(item) {
+      if (item.buy_amount != null && !isNaN(Number(item.buy_amount))) return Number(item.buy_amount);
+      const p = Number(item.buy_price), s = Number(item.buy_shares);
+      if (!isNaN(p) && !isNaN(s) && p > 0 && s > 0) return p * s;
+      return null;
+    }
+
     function escapeHtml(s) {
       if (!s) return '';
       return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -467,7 +475,14 @@
             <div class="card-meta">来源：${escapeHtml(item.source || '未填写')} · ${formatDate(item.recommend_date)}</div>
             <div class="card-content">${escapeHtml(item.content || '')}</div>
             <div class="card-status ${item.is_bought ? 'status-bought' : 'status-not'}">
-              ${item.is_bought ? '已买入' + (item.buy_price ? ' · 买入价 ' + item.buy_price : '') : '未买入'}
+              ${item.is_bought ? (() => {
+                const parts = ['已买入'];
+                if (item.buy_price) parts.push('价 ' + item.buy_price);
+                if (item.buy_shares) parts.push('量 ' + item.buy_shares);
+                const amt = getBuyAmount(item);
+                if (amt != null) parts.push('额 ' + (Math.round(amt * 100) / 100));
+                return parts.join(' · ');
+              })() : '未买入'}
             </div>
           </div>`).join('');
       } else {
@@ -477,8 +492,9 @@
           if (item.is_bought) {
             const parts = [];
             if (item.buy_shares) parts.push('数量: ' + item.buy_shares);
-            if (item.buy_amount) parts.push('金额: ' + item.buy_amount + '元');
             if (item.buy_price) parts.push('价格: ' + item.buy_price);
+            const amt = getBuyAmount(item);
+            if (amt != null) parts.push('金额: ' + (Math.round(amt * 100) / 100) + '元');
             if (item.buy_date) parts.push('购入: ' + formatDate(item.buy_date));
             if (!parts.length) parts.push('已买入');
             buyInfo = parts.map(p => '<div style="font-size:11px;line-height:1.45;">' + p + '</div>').join('');
@@ -610,9 +626,9 @@
         let buyInfo = '已买入<br>';
         if (item.buy_date) buyInfo += '买入时间：' + formatFullDate(item.buy_date) + '<br>';
         if (item.buy_price) buyInfo += '买入价格：' + item.buy_price + '<br>';
-        if (item.buy_type === 'shares' && item.buy_shares) buyInfo += '买入份数/股数：' + item.buy_shares;
-        else if (item.buy_amount) buyInfo += '买入金额：' + item.buy_amount + ' 元';
-        else if (item.buy_shares) buyInfo += '买入份数/股数：' + item.buy_shares;
+        if (item.buy_shares) buyInfo += '买入数量：' + item.buy_shares + '<br>';
+        const amt = getBuyAmount(item);
+        if (amt != null) buyInfo += '买入金额：' + (Math.round(amt * 100) / 100) + ' 元';
         html += `<div class="detail-label" style="margin-top:16px;">我的操作</div><div class="detail-value">${buyInfo}</div>`;
       } else {
         html += `<div class="detail-label" style="margin-top:16px;">我的操作</div><div class="detail-value status-not">未买入</div>`;
