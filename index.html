@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#F7F5F2" />
   <title>基金股票推荐整理</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%235B8A8A'/><text x='50' y='68' font-size='55' text-anchor='middle' fill='white' font-family='system-ui,sans-serif' font-weight='700'>基</text></svg>" />
-  <meta name="app-version" content="1.4.1" />
+  <meta name="app-version" content="1.4.2" />
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     :root {
@@ -133,7 +133,7 @@
         <button class="btn btn-secondary" id="googleLoginBtn" style="width:100%;font-size:13px;">使用 Google 登录</button>
       </div>
       <div class="auth-switch" id="authSwitch">还没有账号？<a href="javascript:void(0)" id="switchToRegister" style="color:#5B8A8A;font-weight:600;margin-left:4px;">去注册</a></div>
-      <div class="version-tag">版本 v1.4.1</div>
+      <div class="version-tag">版本 v1.4.2</div>
     </div>
   </div>
 
@@ -143,7 +143,7 @@
 
     <div id="listPage" class="page active">
       <div class="topbar">
-        <h1>基金股票推荐整理 <span style="font-size:11px;color:#aaa;font-weight:400;">v1.4.1</span></h1>
+        <h1>基金股票推荐整理 <span style="font-size:11px;color:#aaa;font-weight:400;">v1.4.2</span></h1>
         <div class="topbar-actions">
           <button class="icon-btn" id="trashBtn" title="回收站">🗑</button>
           <button class="icon-btn" id="refreshBtn" title="刷新">↻</button>
@@ -186,8 +186,16 @@
                 <label><input type="radio" name="buyType" value="amount" /> 按金额</label>
               </div>
             </div>
-            <div class="form-group" id="sharesGroup"><label>买入份数 / 股数</label><input type="number" id="inputBuyShares" placeholder="例如：100" step="1" /></div>
-            <div class="form-group" id="amountGroup" style="display:none;"><label>买入金额（元）</label><input type="number" id="inputBuyAmount" placeholder="例如：5000" step="0.01" /></div>
+            <div class="form-group" id="sharesGroup">
+              <label>买入份数 / 股数</label>
+              <input type="number" id="inputBuyShares" placeholder="例如：100" step="1" />
+              <div id="calcAmountHint" style="margin-top:8px;font-size:13px;color:#5B8A8A;display:none;"></div>
+            </div>
+            <div class="form-group" id="amountGroup" style="display:none;">
+              <label>买入金额（元）</label>
+              <input type="number" id="inputBuyAmount" placeholder="例如：5000" step="0.01" />
+              <div id="calcSharesHint" style="margin-top:8px;font-size:13px;color:#5B8A8A;display:none;"></div>
+            </div>
             <div class="form-group"><label>买入时间</label><input type="date" id="inputBuyDate" /></div>
           </div>
         </div>
@@ -613,11 +621,13 @@
       showPage('detailPage');
     }
 
-    // 详情页：点击非内容区域返回
+    // 详情页：点击卡片内容区域也可返回（编辑/删除/链接除外）
     document.addEventListener('click', function detailBlankBack(e) {
       const page = document.getElementById('detailPage');
       if (!page || !page.classList.contains('active')) return;
-      if (e.target.closest('.detail-section') || e.target.closest('.btn-row') || e.target.closest('.page-header') || e.target.closest('a') || e.target.closest('button')) return;
+      // 点了按钮或链接不返回
+      if (e.target.closest('button') || e.target.closest('a') || e.target.closest('.btn-row') || e.target.closest('.page-header')) return;
+      // 点在详情页内（包括白色卡片）则返回列表
       if (page.contains(e.target)) showPage('listPage');
     });
 
@@ -754,23 +764,42 @@
       });
     });
 
-    // 自动计算：金额 ≈ 价格 × 数量
+    // 自动计算：金额 ≈ 价格 × 数量（并明确显示）
     function autoCalcBuy() {
       const price = parseFloat(document.getElementById('inputBuyPrice').value);
       const shares = parseFloat(document.getElementById('inputBuyShares').value);
+      const amount = parseFloat(document.getElementById('inputBuyAmount').value);
       const amountInput = document.getElementById('inputBuyAmount');
       const sharesInput = document.getElementById('inputBuyShares');
+      const hintA = document.getElementById('calcAmountHint');
+      const hintS = document.getElementById('calcSharesHint');
       const buyType = document.querySelector('input[name="buyType"]:checked')?.value || 'shares';
       if (buyType === 'shares') {
         if (!isNaN(price) && !isNaN(shares) && price > 0 && shares > 0) {
-          // 显示参考金额（不强制改 buyType，只写入金额字段方便查看）
-          amountInput.value = (price * shares).toFixed(2);
+          const total = price * shares;
+          amountInput.value = total.toFixed(2);
+          if (hintA) {
+            hintA.style.display = 'block';
+            hintA.textContent = '约合金额：' + total.toFixed(2) + ' 元';
+          }
+        } else if (hintA) {
+          hintA.style.display = 'none';
+          hintA.textContent = '';
         }
+        if (hintS) hintS.style.display = 'none';
       } else {
-        const amount = parseFloat(amountInput.value);
         if (!isNaN(price) && !isNaN(amount) && price > 0 && amount > 0) {
-          sharesInput.value = (amount / price).toFixed(2);
+          const qty = amount / price;
+          sharesInput.value = qty.toFixed(2);
+          if (hintS) {
+            hintS.style.display = 'block';
+            hintS.textContent = '约合数量：' + qty.toFixed(2);
+          }
+        } else if (hintS) {
+          hintS.style.display = 'none';
+          hintS.textContent = '';
         }
+        if (hintA) hintA.style.display = 'none';
       }
     }
     ['inputBuyPrice', 'inputBuyShares', 'inputBuyAmount'].forEach(id => {
