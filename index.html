@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#F7F5F2" />
   <title>基金股票推荐整理</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%235B8A8A'/><text x='50' y='68' font-size='55' text-anchor='middle' fill='white' font-family='system-ui,sans-serif' font-weight='700'>基</text></svg>" />
-  <meta name="app-version" content="1.4.0" />
+  <meta name="app-version" content="1.4.1" />
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     :root {
@@ -133,7 +133,7 @@
         <button class="btn btn-secondary" id="googleLoginBtn" style="width:100%;font-size:13px;">使用 Google 登录</button>
       </div>
       <div class="auth-switch" id="authSwitch">还没有账号？<a href="javascript:void(0)" id="switchToRegister" style="color:#5B8A8A;font-weight:600;margin-left:4px;">去注册</a></div>
-      <div class="version-tag">版本 v1.4.0</div>
+      <div class="version-tag">版本 v1.4.1</div>
     </div>
   </div>
 
@@ -143,7 +143,7 @@
 
     <div id="listPage" class="page active">
       <div class="topbar">
-        <h1>基金股票推荐整理 <span style="font-size:11px;color:#aaa;font-weight:400;">v1.4.0</span></h1>
+        <h1>基金股票推荐整理 <span style="font-size:11px;color:#aaa;font-weight:400;">v1.4.1</span></h1>
         <div class="topbar-actions">
           <button class="icon-btn" id="trashBtn" title="回收站">🗑</button>
           <button class="icon-btn" id="refreshBtn" title="刷新">↻</button>
@@ -277,21 +277,44 @@
     }
     function generateId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
     function formatDate(ts) {
+      ts = normalizeTs(ts);
       if (!ts) return '-';
       const d = new Date(ts);
+      if (isNaN(d.getTime())) return '-';
       return String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
     }
-    function formatFullDate(ts) { return ts ? new Date(ts).toLocaleDateString('zh-CN') : '-'; }
+    function formatFullDate(ts) {
+      ts = normalizeTs(ts);
+      if (!ts) return '-';
+      const d = new Date(ts);
+      if (isNaN(d.getTime())) return '-';
+      return d.toLocaleDateString('zh-CN');
+    }
+    function normalizeTs(v) {
+      if (v == null || v === '') return null;
+      if (typeof v === 'number' && !isNaN(v)) return v;
+      const n = Number(v);
+      if (!isNaN(n) && isFinite(n) && n > 1000000000) return n; // 时间戳
+      const d = new Date(v);
+      const t = d.getTime();
+      return isNaN(t) ? null : t;
+    }
     function toDateInputValue(ts) {
+      ts = normalizeTs(ts);
       if (!ts) return '';
       const d = new Date(ts);
+      if (isNaN(d.getTime())) return '';
       return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
     }
     function fromDateInputValue(str) {
       if (!str) return null;
-      const p = str.split('-');
+      const p = String(str).split('-');
       if (p.length !== 3) return null;
-      return new Date(+p[0], +p[1]-1, +p[2]).getTime();
+      const y = parseInt(p[0], 10), m = parseInt(p[1], 10) - 1, day = parseInt(p[2], 10);
+      if (!y || isNaN(m) || !day) return null;
+      const d = new Date(y, m, day, 12, 0, 0, 0); // 用中午避免时区边界问题
+      const t = d.getTime();
+      return isNaN(t) ? null : t;
     }
     function escapeHtml(s) {
       if (!s) return '';
@@ -318,7 +341,16 @@
           .is('deleted_at', null)
           .order('recommend_date', { ascending: false });
         if (error) throw error;
-        recommendations = data || [];
+        recommendations = (data || []).map(r => ({
+          ...r,
+          recommend_date: normalizeTs(r.recommend_date),
+          buy_date: normalizeTs(r.buy_date),
+          deleted_at: normalizeTs(r.deleted_at),
+          is_bought: r.is_bought === true || r.is_bought === 'true' || r.is_bought === 't' || r.is_bought === 1,
+          buy_price: r.buy_price != null && r.buy_price !== '' ? Number(r.buy_price) : null,
+          buy_shares: r.buy_shares != null && r.buy_shares !== '' ? Number(r.buy_shares) : null,
+          buy_amount: r.buy_amount != null && r.buy_amount !== '' ? Number(r.buy_amount) : null
+        }));
       } catch (e) {
         console.error(e);
         showError('读取数据失败：' + (e.message || e));
@@ -372,7 +404,13 @@
           .not('deleted_at', 'is', null)
           .order('deleted_at', { ascending: false });
         if (error) throw error;
-        return data || [];
+        return (data || []).map(r => ({
+          ...r,
+          recommend_date: normalizeTs(r.recommend_date),
+          buy_date: normalizeTs(r.buy_date),
+          deleted_at: normalizeTs(r.deleted_at),
+          is_bought: r.is_bought === true || r.is_bought === 'true' || r.is_bought === 't' || r.is_bought === 1
+        }));
       } catch (e) {
         console.error(e);
         alert('读取回收站失败：' + (e.message || e));
@@ -533,8 +571,8 @@
         is_bought: isBought,
         buy_price: isBought ? (parseFloat(document.getElementById('inputBuyPrice').value) || null) : null,
         buy_type: isBought ? buyType : null,
-        buy_shares: isBought && buyType === 'shares' ? (parseFloat(document.getElementById('inputBuyShares').value) || null) : null,
-        buy_amount: isBought && buyType === 'amount' ? (parseFloat(document.getElementById('inputBuyAmount').value) || null) : null,
+        buy_shares: isBought ? (parseFloat(document.getElementById('inputBuyShares').value) || null) : null,
+        buy_amount: isBought ? (parseFloat(document.getElementById('inputBuyAmount').value) || null) : null,
         buy_date: isBought ? fromDateInputValue(document.getElementById('inputBuyDate').value) : null
       };
       try {
@@ -714,6 +752,30 @@
         document.getElementById('sharesGroup').style.display = isShares ? 'block' : 'none';
         document.getElementById('amountGroup').style.display = isShares ? 'none' : 'block';
       });
+    });
+
+    // 自动计算：金额 ≈ 价格 × 数量
+    function autoCalcBuy() {
+      const price = parseFloat(document.getElementById('inputBuyPrice').value);
+      const shares = parseFloat(document.getElementById('inputBuyShares').value);
+      const amountInput = document.getElementById('inputBuyAmount');
+      const sharesInput = document.getElementById('inputBuyShares');
+      const buyType = document.querySelector('input[name="buyType"]:checked')?.value || 'shares';
+      if (buyType === 'shares') {
+        if (!isNaN(price) && !isNaN(shares) && price > 0 && shares > 0) {
+          // 显示参考金额（不强制改 buyType，只写入金额字段方便查看）
+          amountInput.value = (price * shares).toFixed(2);
+        }
+      } else {
+        const amount = parseFloat(amountInput.value);
+        if (!isNaN(price) && !isNaN(amount) && price > 0 && amount > 0) {
+          sharesInput.value = (amount / price).toFixed(2);
+        }
+      }
+    }
+    ['inputBuyPrice', 'inputBuyShares', 'inputBuyAmount'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.addEventListener('input', autoCalcBuy);
     });
 
     const STOCK_DICT = {
